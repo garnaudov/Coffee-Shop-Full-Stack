@@ -32,7 +32,7 @@ def get_token_auth_header():
         raise AuthError(
             {
                 "code": "authorization_header_missing",
-                "description": "Authorization Header is Expected"
+                "description": "Authorization header is expected"
             }, 401)
 
     parts = auth.split()
@@ -41,50 +41,51 @@ def get_token_auth_header():
         raise AuthError(
             {
                 "code": "invalid_header",
-                "description": "Authorization Header Must Start With"
-                " Bearer"
+                "description": 'Authorization header must start with "Bearer".'
             }, 401)
+
     elif len(parts) == 1:
+
         raise AuthError(
             {
                 "code": "invalid_header",
-                "description": "Token Not Found"
+                "description": "Token not found"
             }, 401)
+
     elif len(parts) > 2:
+
         raise AuthError(
             {
                 "code": "invalid_header",
-                "description": "Authorization Header Must Be"
-                " Bearer token"
+                "description": 'Authorization header must be Bearer token.'
             }, 401)
 
     token = parts[1]
     return token
 
+# Checks if the decoded JWT includes the required permission.
 
-# check_permissions(permission, payload) method:
-# Checks if the decoded JWT has the required permission.
+
 def check_permissions(permission, payload):
     if payload.get('permissions'):
-        token_scopes = payload.get("permissions")
-        if (permission not in token_scopes):
+        token_premissions = payload.get("permissions")
+        if (permission not in token_premissions):
             raise AuthError(
                 {
                     'code': 'invalid_permissions',
-                    'description': 'User Does Not Have Enough Privileges'
-                }, 401)
+                    'description': 'Permissions are not included in JWT.'
+                }, 403)
         else:
             return True
     else:
         raise AuthError(
             {
                 'code': 'invalid_permissions',
-                'description': 'User Does Not Have Any Roles Attached'
-            }, 401)
+                'description': 'User belongs to no role.'
+            }, 403)
 
 
-# verify_decode_jwt(token) method:
-# Receives the encoded token and validates it after decoded.
+# Validates the encoded token after decoding.
 # Note urlopen has a common certificate error described here: https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
 def verify_decode_jwt(token):
     jsonurl = urlopen(f'https://{AUTH0_DOMAIN}/.well-known/jwks.json')
@@ -95,7 +96,7 @@ def verify_decode_jwt(token):
         raise AuthError(
             {
                 'code': 'invalid_header',
-                'description': 'Authorization Malformed.'
+                'description': 'Authorization malformed.'
             }, 401)
 
     for key in jwks['keys']:
@@ -109,9 +110,12 @@ def verify_decode_jwt(token):
             }
     if rsa_key:
         try:
-            payload = jwt.decode(token, rsa_key, algorithms=ALGORITHMS,
-                                 audience=API_AUDIENCE,
-                                 issuer='https://' + AUTH0_DOMAIN + '/')
+            payload = jwt.decode(
+                token,
+                rsa_key, algorithms=ALGORITHMS,
+                audience=API_AUDIENCE,
+                issuer='https://' + AUTH0_DOMAIN + '/'
+            )
 
             return payload
 
@@ -119,51 +123,34 @@ def verify_decode_jwt(token):
             raise AuthError(
                 {
                     'code': 'token_expired',
-                    'description': 'Token Expired.'
+                    'description': 'Token expired.'
                 }, 401)
 
         except jwt.JWTClaimsError:
             raise AuthError(
                 {
-                    'code':
-                    'invalid_claims',
-                    'description': 'Incorrect Claims. Please, Check the Audience and Issuer.'
+                    'code': 'invalid_claims',
+                    'description': 'Incorrect claims. Please check the audience and issuer'
                 }, 401)
         except Exception:
             raise AuthError(
                 {
                     'code': 'invalid_header',
-                    'description': 'Unable to Parse Authentication Token.'
+                    'description': 'Unable to parse authentication token.'
                 }, 400)
     raise AuthError(
         {
             'code': 'invalid_header',
-            'description': 'Unable to Find the Appropriate Key.'
+            'description': 'Unable to find the appropriate key.'
         }, 400)
 
-
-# requires_auth(permission) decorator method:
-# use get_token_auth_header method to get the token.
-# use verify_decode_jwt method to decode the jwt.
-# use  check_permissions method validate claims and check the requested permission.
-# return the decorator which passes the decoded payload to the decorated method.
 def requires_auth(permission=''):
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
             token = get_token_auth_header()
-
-            try:
-                payload = verify_decode_jwt(token)
-            except:
-                raise AuthError({
-                    'code': 'invalid token',
-                    'description': 'Invalid Token'
-                }, 401)
-
+            payload = verify_decode_jwt(token)
             check_permissions(permission, payload)
-
             return f(payload, *args, **kwargs)
-
         return wrapper
     return requires_auth_decorator
